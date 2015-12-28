@@ -60,8 +60,6 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 	totalNormals = numNormalsPerVoxel * numVoxels
 	vertexNormals = OpenMaya.MVectorArray()
 
-
-	print numVoxels
 	for i in range (numVoxels):
 		pVoxelCenterPosition = voxelCenterPosition[i]
 		#Update VertexArray for VoxelMesh
@@ -122,13 +120,13 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 								OpenMaya.MVector(0.0,1.0,0.0),			#vertex normal on face (2,3,7,6) #3
 								OpenMaya.MVector(0.0,1.0,0.0),			#vertex normal on face (2,3,7,6) #7
 								OpenMaya.MVector(0.0,1.0,0.0)			#vertex normal on face (2,3,7,6) #6
-							]
-		print numNormalsPerVoxel			
+							]			
 		for j in range (numNormalsPerVoxel):
 			vertexNormals.append(vertexNormalsList[j])
 
 
 	mFnMesh = OpenMaya.MFnMesh()
+	'''
 	uArray = OpenMaya.MFloatArray()
 	uArray.setLength(14)
 	vArray = OpenMaya.MFloatArray()
@@ -139,20 +137,14 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 		uArray.set(uList[i],i)
 	for i in range (14):
 		vArray.set(vList[i],i)
+	'''
 	#shapeNode
-	print totalVertices
-	print totalPolygons
-	print polygonCounts
-	print polygonConnects.length()
-	print polygonConnects
-	print vertexNormals.length()
-	print vertexNormals
 	mMeshShape = mFnMesh.create (totalVertices, totalPolygons, vertexArray, polygonCounts, polygonConnects)
 	mDagNode = OpenMaya.MFnDagNode(mMeshShape)
-	print mDagNode.name()
+	#print mDagNode.name()
 	mDagPath = OpenMaya.MDagPath()
 	mDagNode = OpenMaya.MFnDagNode(mDagNode.child(0))
-	print mDagNode.name()
+	#print mDagNode.name()
 	mDagNode.getPath(mDagPath)
 	mCubeMesh = OpenMaya.MFnMesh(mDagPath)
 
@@ -161,17 +153,16 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 	facelist = OpenMaya.MIntArray()
 	for i in range(totalPolygons):
 		facelist.append(i)
-
-	print facelist
-	print polygonConnects
 	#confused how to use setFaceVertexNormals
 	#rewrite the function for setFaceVertexNormals based on setFaceVertexNormal
 	#by query the facelist
-	for i in range (facelist):
+	#support hard edge!
+	'''
+	for i in range (facelist.length()):
 		for j in range (numVerticesPerPolygon):
 			index = numVerticesPerPolygon * i + j
 			mCubeMesh.setFaceVertexNormal(vertexNormals[index], i, polygonConnects[index])
-
+	'''
 	#--[retrive initialShadingGroup]--#
 	mSelectionList = OpenMaya.MSelectionList()
 	mSelectionList.add("initialShadingGroup")
@@ -188,9 +179,14 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 
 def floatRange(start, stop, step):
 	s=start
-	while (s < stop) :
-		yield s
-		s =s + step;
+	if s <stop:
+		while (s < stop) :
+			yield s
+			s = s + step
+	else:
+		while (s>stop):
+			yield s
+			s = s - step
 
 def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 	'''
@@ -201,17 +197,113 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 	onlu create voxel inside the mesh
 	'''
 	voxelCenterPositions=[]
-	mMinPoint = mBBox.min()
 	mHalfVoxelDistance = mVoxelDistance/2
-	mMinPoint.x = mMinPoint.x - mHalfVoxelDistance
-	mMinPoint.y = mMinPoint.y - mHalfVoxelDistance
-	mMinPoint.z = mMinPoint.z - mHalfVoxelDistance
-	mMaxPoint = mBBox.max()
-	mMaxPoint.x = mMaxPoint.x + mHalfVoxelDistance
-	mMaxPoint.y = mMaxPoint.y + mHalfVoxelDistance
-	mMaxPoint.z = mMaxPoint.z + mHalfVoxelDistance
+
+	mMidPoint = OpenMaya.MPoint()
+	mMidPoint.x = (mBBox.min().x + mBBox.max().x)/2
+	mMidPoint.y = (mBBox.min().y + mBBox.max().y)/2
+	mMidPoint.z = (mBBox.min().z + mBBox.max().z)/2
 
 	# iterate all the points inside the BoundingBox
+	# iterate from the MidPoint
+	# searching algorithm
+	def searchArea(startPoint, endPoint, step , rayDirection, voxelCenterPositions):
+		for point_Zcoord in floatRange (startPoint.z, endPoint.z, step):
+			for point_Xcoord in floatRange (startPoint.x, endPoint.x, step):
+				for point_Ycoord in floatRange (startPoint.y, endPoint.y, step):
+					#create ray source and direction
+					raySource = OpenMaya.MFloatPoint(point_Xcoord,point_Ycoord,point_Zcoord)
+					#rayDirection = OpenMaya.MFloatVector(0,0,-1)
+					hitPointArray = OpenMaya.MFloatPointArray()
+					tolerance = 1e-6
+					mMeshObj.allIntersections( raySource,   	   	#raySource
+											   rayDirection,	   	#rayDirection
+											   None,			   	#faceIds do not need to filter the face
+											   None,			   	#triDis do not need to filter the tris
+											   False,				# do not need to sort the IDs
+											   OpenMaya.MSpace.kTransform,	#ray source and direction are specified in the mesh local coordinates
+											   float(9999),			#the range of the ray
+											   False,				#do not need to test both directions	
+											   None,				#do not need accelParams
+											   False,				#do not need to sort hits
+											   hitPointArray,		#return the hit point array
+											   None,				#do not need the hit point distance params
+											   None,				#do not need hit faces ids
+											   None,				#do not need hit tris ids
+											   None,				#do not need barycentric coordinates of faces
+											   None,				#do not need barycentric coordinates of tris
+											   tolerance            #hit tolerance
+												)
+					if (hitPointArray.length()%2 == 1):
+						#createVoxelMesh(meshContainer,raySource,0.49)
+						voxelCenterPositions.append(raySource)
+		#print len(voxelCenterPositions)
+	xmin = mBBox.min().x
+	ymin = mBBox.min().y
+	zmin = mBBox.min().z
+	xmax = mBBox.max().x
+	ymax = mBBox.max().y
+	zmax = mBBox.max().z
+	mBBoxPoints = [ OpenMaya.MPoint(xmin, ymin, zmin),
+					OpenMaya.MPoint(xmin, ymin, zmax),
+					OpenMaya.MPoint(xmin, ymax, zmin),
+					OpenMaya.MPoint(xmin, ymax, zmax),
+					OpenMaya.MPoint(xmax, ymin, zmin),
+					OpenMaya.MPoint(xmax, ymin, zmax),
+					OpenMaya.MPoint(xmax, ymax, zmin),
+					OpenMaya.MPoint(xmax, ymax, zmax)
+					]
+	#search all the area inside the bounding box from center
+	#'''
+	rayDirection = OpenMaya.MFloatVector(-1,0,0)
+	searchArea(mMidPoint, mBBoxPoints[0], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x
+	mNewPoint.y = mMidPoint.y 
+	mNewPoint.z = mMidPoint.z + mVoxelDistance
+	searchArea(mNewPoint, mBBoxPoints[1], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x 
+	mNewPoint.y = mMidPoint.y +mVoxelDistance
+	mNewPoint.z = mMidPoint.z 
+	searchArea(mNewPoint, mBBoxPoints[2], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x 
+	mNewPoint.y = mMidPoint.y + mVoxelDistance
+	mNewPoint.z = mMidPoint.z + mVoxelDistance
+	searchArea(mNewPoint, mBBoxPoints[3], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+
+	rayDirection = OpenMaya.MFloatVector(1,0,0)
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x + mVoxelDistance
+	mNewPoint.y = mMidPoint.y 
+	mNewPoint.z = mMidPoint.z 
+	searchArea(mNewPoint, mBBoxPoints[4], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x + mVoxelDistance
+	mNewPoint.y = mMidPoint.y
+	mNewPoint.z = mMidPoint.z + mVoxelDistance
+	searchArea(mNewPoint, mBBoxPoints[5], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x + mVoxelDistance
+	mNewPoint.y = mMidPoint.y + mVoxelDistance
+	mNewPoint.z = mMidPoint.z
+	searchArea(mNewPoint, mBBoxPoints[6], mVoxelDistance, rayDirection, voxelCenterPositions)
+
+	mNewPoint = OpenMaya.MPoint()
+	mNewPoint.x = mMidPoint.x + mVoxelDistance
+	mNewPoint.y = mMidPoint.y + mVoxelDistance
+	mNewPoint.z = mMidPoint.z + mVoxelDistance
+	searchArea(mNewPoint, mBBoxPoints[7], mVoxelDistance, rayDirection, voxelCenterPositions)
+	#'''
+
+	'''
 	for point_Zcoord in floatRange (mMinPoint.z, mMaxPoint.z, mVoxelDistance):
 		for point_Xcoord in floatRange (mMinPoint.x, mMaxPoint.x, mVoxelDistance):
 			for point_Ycoord in floatRange (mMinPoint.y, mMaxPoint.y, mVoxelDistance):
@@ -241,8 +333,8 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 				if (hitPointArray.length()%2 == 1):
 					#createVoxelMesh(meshContainer,raySource,0.49)
 					voxelCenterPositions.append(raySource)
-	#print len(voxelCenterPositions)
-
+	'''
+	print len(voxelCenterPositions)
 	voxelData =voxel()
 	voxelData.voxelCenterPositions = voxelCenterPositions
 	return voxelData
@@ -256,10 +348,6 @@ def getBoundingBox (mMeshObj):
 	BBox = OpenMaya.MBoundingBox()
 	for i in range(mPointArray.length()):
 		BBox.expand (mPointArray[i])
-	print BBox.min()[0]
-	print BBox.min()[1]
-	print BBox.min()[2]
-	print BBox.max()[0]
 	return BBox 
 
 
@@ -278,12 +366,11 @@ if mSelectionlist.length() > 0:
 	BBox = getBoundingBox (mFnMesh) 
 	voxelData = voxel()
 	meshContainer = OpenMaya.MObject()
-	meshContainer = createMeshContainer()
-	voxelData = getVoxels (meshContainer,0.6, BBox, mFnMesh)
+	#meshContainer = createMeshContainer()
+	voxelData = getVoxels (meshContainer,0.21, BBox, mFnMesh)
 	voxelCenterPositions = voxelData.voxelCenterPositions
 	#for i in range(len(voxelCenterPositions)):
-	createVoxelMesh(meshContainer,voxelCenterPositions,0.58)
-		#createPolyCube(meshContainer,0.09, voxelCenterPositions[i])
+	createVoxelMesh(meshContainer,voxelCenterPositions,0.2)
 
 else:
 	print 'no mesh is selected'
