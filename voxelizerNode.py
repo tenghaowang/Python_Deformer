@@ -14,7 +14,7 @@ class voxel(object):
     def __init__(self):
         # instance variable unique to each instance
     	self.voxelCenterPositions=[]
-    	self.voxelColor=[]
+    	self.uvCoordArray=[]
 
 def createMeshContainer():
 	mDagNode = OpenMaya.MFnDagNode()
@@ -33,32 +33,33 @@ def createPolyCube(meshContainer, cubeWidth, voxelCenterPosition):
 
 
 #The code below is to manully generate the polycube primitive
-def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
+def createVoxelMesh(meshContainer, voxelCenterPosition,uvArray,texNodeName,cubeWidth):
 	numVoxels = len(voxelCenterPosition)
-	numVertices = 8			#number of vertices
-	numPolygons = 6 		#number of polygons
-	numVerticesPerPolygon = 4     #number of vertices per polygon
-	numNormalsPerVoxel = numVerticesPerPolygon * numPolygons #24 number of vertex normals
-	numPolygonConnectsPerVoxel = numPolygons * numVerticesPerPolygon #24 number of polygon connects
+	numVertices = 8														#number of vertices
+	numPolygons = 6 													#number of polygons
+	numVerticesPerPolygon = 4     										#number of vertices per polygon
+	numNormalsPerVoxel = numVerticesPerPolygon * numPolygons 			#24 number of vertex normals
+	numPolygonConnectsPerVoxel = numPolygons * numVerticesPerPolygon 	#24 number of polygon connects
 	cubeHalfWidth = cubeWidth/2
 	#initialize all the params in the MFnMesh.create()
 	#vertexArray: point array, This should include all the vertices in the mesh and no eatras
 	totalVertices = numVertices * numVoxels
 	vertexArray =OpenMaya.MFloatPointArray()
-
 	#polygonCounts array of vertex counts for each polygon
 	#for the cube would have 6 faces, each of which had 4 verts, so the polygonCounts would be [4,4,4,4,4,4]
 	totalPolygons = numPolygons * numVoxels
 	polygonCounts = OpenMaya.MIntArray()
-
 	#polygonConnects 
 	#array of vertex connections for each polygon
-	totalPolygonConnects = numPolygonConnectsPerVoxel * numVoxels
 	polygonConnects = OpenMaya.MIntArray()
-
 	#set shared Normals for these vertices
-	totalNormals = numNormalsPerVoxel * numVoxels
 	vertexNormals = OpenMaya.MVectorArray()
+	#vertexColorArray
+	vertexColorArray = OpenMaya.MColorArray()
+	#vertexColorIndexArray
+	vertexIndexArray = OpenMaya.MIntArray()
+	#PolygonIDArray
+	faceList = OpenMaya.MIntArray()
 
 	for i in range (numVoxels):
 		pVoxelCenterPosition = voxelCenterPosition[i]
@@ -72,29 +73,34 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 						OpenMaya.MFloatPoint(pVoxelCenterPosition.x+cubeHalfWidth, pVoxelCenterPosition.y+cubeHalfWidth, pVoxelCenterPosition.z-cubeHalfWidth), #vertex 6
 						OpenMaya.MFloatPoint(pVoxelCenterPosition.x+cubeHalfWidth, pVoxelCenterPosition.y+cubeHalfWidth, pVoxelCenterPosition.z+cubeHalfWidth), #vertex 7
 					 ]
+
 		for j in range (numVertices):
 			vertexArray.append(vertexList[j])
-		#print polygonCounts.length()
+			#here need to assign vertex color
+			if texNodeName:
+				vertexColor = cmds.colorAtPoint(texNodeName, o='RGB', u=uvArray[i][0], v=uvArray[i][1])
+				mColor = OpenMaya.MColor(vertexColor[0],vertexColor[1],vertexColor[2])
+				vertexColorArray.append(mColor)
+				vertexIndexArray.append(i * numVertices + j)
+			#print vertexColor
+
 		#Update polygonCounts for VoxelMesh
 		for j in range (numPolygons):
 			polygonCounts.append(numVerticesPerPolygon)
+			faceList.append(i*numPolygons+j)
 		#Update polygonConnects for VoxelMesh
-		#print polygonConnects.length()
+		#Update vertexNormals for VoxelMesh
 		polygonConnectsList = [	0,1,3,2,
 								1,5,7,3,
 								4,6,7,5,
 								2,6,4,0,
 								0,4,5,1,
 								2,3,7,6]
-		#print numPolygonConnectsPerVoxel
-		for j in range (numPolygonConnectsPerVoxel):
-			polygonConnects.append(polygonConnectsList[j] + i * numVertices)
-		#Update vertexNormals for VoxelMesh
 
 		vertexNormalsList = [	OpenMaya.MVector(-1.0,0.0,0.0),   		#vertex normal on face (0,1,3,2) #0
-								OpenMaya.MVector(-1.0,0.0,0.0),		#vertex normal on face (0,1,3,2) #1
-								OpenMaya.MVector(-1.0,0.0,0.0),		#vertex normal on face (0,1,3,2) #7
-								OpenMaya.MVector(-1.0,0.0,0.0),		#vertex normal on face (0,1,3,2) #3
+								OpenMaya.MVector(-1.0,0.0,0.0),			#vertex normal on face (0,1,3,2) #1
+								OpenMaya.MVector(-1.0,0.0,0.0),			#vertex normal on face (0,1,3,2) #7
+								OpenMaya.MVector(-1.0,0.0,0.0),			#vertex normal on face (0,1,3,2) #3
 
 								OpenMaya.MVector(0.0,0.0,1.0),   		#vertex normal on face (1,5,7,3) #1
 								OpenMaya.MVector(0.0,0.0,1.0),			#vertex normal on face (1,5,7,3) #5
@@ -107,14 +113,14 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 								OpenMaya.MVector(1.0,0.0,0.0),			#vertex normal on face (4,6,7,5) #5
 
 								OpenMaya.MVector(0.0,0.0,-1.0),   		#vertex normal on face (2,6,4,0) #2
-								OpenMaya.MVector(0.0,0.0,-1.0),		#vertex normal on face (2,6,4,0) #6
-								OpenMaya.MVector(0.0,0.0,-1.0),		#vertex normal on face (2,6,4,0) #4
-								OpenMaya.MVector(0.0,0.0,-1.0),		#vertex normal on face (2,6,4,0) #0
+								OpenMaya.MVector(0.0,0.0,-1.0),			#vertex normal on face (2,6,4,0) #6
+								OpenMaya.MVector(0.0,0.0,-1.0),			#vertex normal on face (2,6,4,0) #4
+								OpenMaya.MVector(0.0,0.0,-1.0),			#vertex normal on face (2,6,4,0) #0
 
 								OpenMaya.MVector(0.0,-1.0,0.0),   		#vertex normal on face (0,4,5,1) #0 
-								OpenMaya.MVector(0.0,-1.0,0.0),		#vertex normal on face (0,4,5,1) #4
-								OpenMaya.MVector(0.0,-1.0,0.0),		#vertex normal on face (0,4,5,1) #5
-								OpenMaya.MVector(0.0,-1.0,0.0),		#vertex normal on face (0,4,5,1) #1
+								OpenMaya.MVector(0.0,-1.0,0.0),			#vertex normal on face (0,4,5,1) #4
+								OpenMaya.MVector(0.0,-1.0,0.0),			#vertex normal on face (0,4,5,1) #5
+								OpenMaya.MVector(0.0,-1.0,0.0),			#vertex normal on face (0,4,5,1) #1
 
 								OpenMaya.MVector(0.0,1.0,0.0),   		#vertex normal on face (2,3,7,6) #2
 								OpenMaya.MVector(0.0,1.0,0.0),			#vertex normal on face (2,3,7,6) #3
@@ -123,21 +129,12 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 							]			
 		for j in range (numNormalsPerVoxel):
 			vertexNormals.append(vertexNormalsList[j])
+			polygonConnects.append(polygonConnectsList[j] + i * numVertices)
+		#for j in range (numPolygonConnectsPerVoxel):
+
 
 
 	mFnMesh = OpenMaya.MFnMesh()
-	'''
-	uArray = OpenMaya.MFloatArray()
-	uArray.setLength(14)
-	vArray = OpenMaya.MFloatArray()
-	vArray.setLength(14)
-	uList = [0.375, 0.625, 0.375, 0.625, 0.375, 0.625, 0.375, 0.625, 0.375, 0.625, 0.875, 0.875, 0.125, 0.125]
-	vList = [0.0, 0.0, 0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1.0, 1.0, 0.0, 0.25, 0.0, 0.25]
-	for i in range (14):
-		uArray.set(uList[i],i)
-	for i in range (14):
-		vArray.set(vList[i],i)
-	'''
 	#shapeNode
 	mMeshShape = mFnMesh.create (totalVertices, totalPolygons, vertexArray, polygonCounts, polygonConnects)
 	mDagNode = OpenMaya.MFnDagNode(mMeshShape)
@@ -147,22 +144,26 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 	#print mDagNode.name()
 	mDagNode.getPath(mDagPath)
 	mCubeMesh = OpenMaya.MFnMesh(mDagPath)
-
+	'''
 	#assign Normal to the Cubes:
 
-	facelist = OpenMaya.MIntArray()
-	for i in range(totalPolygons):
-		facelist.append(i)
 	#confused how to use setFaceVertexNormals
 	#rewrite the function for setFaceVertexNormals based on setFaceVertexNormal
 	#by query the facelist
 	#support hard edge!
-	'''
-	for i in range (facelist.length()):
+
+	for i in range (faceList.length()):
 		for j in range (numVerticesPerPolygon):
 			index = numVerticesPerPolygon * i + j
 			mCubeMesh.setFaceVertexNormal(vertexNormals[index], i, polygonConnects[index])
 	'''
+	#'''
+	#setVertexColor
+	if texNodeName:
+		mCubeMesh.createColorSetWithName('vertexColorSet')
+		mCubeMesh.setIsColorClamped('vertexClorSet', True)
+		mCubeMesh.setVertexColors(vertexColorArray, vertexIndexArray, None, OpenMaya.MFnMesh.kRGB)
+	#'''
 	#--[retrive initialShadingGroup]--#
 	mSelectionList = OpenMaya.MSelectionList()
 	mSelectionList.add("initialShadingGroup")
@@ -174,7 +175,6 @@ def createVoxelMesh(meshContainer, voxelCenterPosition,cubeWidth):
 	#name = mFnDependencyNode_initialShadingGroup.name() # Result: initialShadingGroup, so it ok so far
 	fnSet = OpenMaya.MFnSet(mObject_initShdGrp)
 	fnSet.addMember(mMeshShape)
-	#cmds.sets(mShapeDagNode.name(), e=True,forceElement='initialShadingGroup')
 
 
 def floatRange(start, stop, step):
@@ -197,6 +197,9 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 	onlu create voxel inside the mesh
 	'''
 	voxelCenterPositions=[]
+	uvArray = []
+	util = OpenMaya.MScriptUtil()
+
 	mHalfVoxelDistance = mVoxelDistance/2
 
 	mMidPoint = OpenMaya.MPoint()
@@ -215,6 +218,7 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 					raySource = OpenMaya.MFloatPoint(point_Xcoord,point_Ycoord,point_Zcoord)
 					#rayDirection = OpenMaya.MFloatVector(0,0,-1)
 					hitPointArray = OpenMaya.MFloatPointArray()
+					hitRayParams = OpenMaya.MFloatArray()
 					tolerance = 1e-6
 					mMeshObj.allIntersections( raySource,   	   	#raySource
 											   rayDirection,	   	#rayDirection
@@ -227,17 +231,31 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 											   None,				#do not need accelParams
 											   False,				#do not need to sort hits
 											   hitPointArray,		#return the hit point array
-											   None,				#do not need the hit point distance params
+											   hitRayParams,		#return hit point distance params
 											   None,				#do not need hit faces ids
 											   None,				#do not need hit tris ids
 											   None,				#do not need barycentric coordinates of faces
 											   None,				#do not need barycentric coordinates of tris
 											   tolerance            #hit tolerance
 												)
+
+					#add the inside raysouce into list for voxel placement
 					if (hitPointArray.length()%2 == 1):
-						#createVoxelMesh(meshContainer,raySource,0.49)
 						voxelCenterPositions.append(raySource)
-		#print len(voxelCenterPositions)
+						#also need to query the intersection geometry color
+						#find nearest intersection point
+						#http://www.chadvernon.com/blog/resources/maya-api-programming/mscriptutil/
+						#Since the Maya API is designed as a C++ library, it has many pointers and references 
+						#that are passed into and returned from various functions. 
+						uvPoint = util.asFloat2Ptr()
+						mPoint = OpenMaya.MPoint(raySource)
+						mMeshObj.getUVAtPoint (mPoint, uvPoint)
+						u = util.getFloat2ArrayItem (uvPoint,0,0)
+						v = util.getFloat2ArrayItem (uvPoint,0,1)
+						uv = [u,v]
+						uvArray.append(uv)						
+
+	#populate raysource Positions
 	xmin = mBBox.min().x
 	ymin = mBBox.min().y
 	zmin = mBBox.min().z
@@ -334,9 +352,9 @@ def getVoxels (meshContainer, mVoxelDistance, mBBox, mMeshObj):
 					#createVoxelMesh(meshContainer,raySource,0.49)
 					voxelCenterPositions.append(raySource)
 	'''
-	print len(voxelCenterPositions)
 	voxelData =voxel()
 	voxelData.voxelCenterPositions = voxelCenterPositions
+	voxelData.uvCoordArray = uvArray
 	return voxelData
 
 
@@ -351,6 +369,38 @@ def getBoundingBox (mMeshObj):
 	return BBox 
 
 
+def meshTextureNode(mMeshObj):
+	shaders = OpenMaya.MObjectArray()
+	indices = OpenMaya.MIntArray()
+	mMeshObj.getConnectedShaders(0, shaders, indices)
+	#here I only consider the geometry applied simple one shader
+	#default lamber1
+	shaderGroup = OpenMaya.MFnDependencyNode(shaders[0])
+	shaderPlug = OpenMaya.MPlug()
+	shaderPlug = shaderGroup.findPlug('surfaceShader')
+	connections = OpenMaya.MPlugArray()
+	shaderPlug.connectedTo(connections, True, False)
+	if connections.length() > 0:
+		#go to read shader body
+		#consider LambertShader
+		LambertShader = OpenMaya.MFnLambertShader (connections[0].node())
+		#print LambertShader.name()
+		mColorInput = LambertShader.findPlug('color')
+		fileOutput = OpenMaya.MPlugArray()
+		mColorInput.connectedTo(fileOutput, True, False)
+
+		if fileOutput.length()>0:
+			dependNode = OpenMaya.MFnDependencyNode(fileOutput[0].node())
+			print "find file input"
+			return dependNode.name()
+		else:
+			print 'there is no texture(lambert) bind to the mesh'
+			return False
+
+
+
+
+
 mSelectionlist = OpenMaya.MSelectionList()
 OpenMaya.MGlobal.getActiveSelectionList(mSelectionlist)
 mDagPath = OpenMaya.MDagPath()
@@ -363,14 +413,15 @@ if mSelectionlist.length() > 0:
 
 	mFnMesh = OpenMaya.MFnMesh(mDagPath)
 	BBox = OpenMaya.MBoundingBox()
-	BBox = getBoundingBox (mFnMesh) 
+	BBox = getBoundingBox (mFnMesh)
+	texNodeName = meshTextureNode(mFnMesh)
 	voxelData = voxel()
 	meshContainer = OpenMaya.MObject()
 	#meshContainer = createMeshContainer()
-	voxelData = getVoxels (meshContainer,0.21, BBox, mFnMesh)
+	voxelData = getVoxels (meshContainer,0.11, BBox, mFnMesh)
 	voxelCenterPositions = voxelData.voxelCenterPositions
-	#for i in range(len(voxelCenterPositions)):
-	createVoxelMesh(meshContainer,voxelCenterPositions,0.2)
+	uvArray = voxelData.uvCoordArray
+	createVoxelMesh(meshContainer,voxelCenterPositions,uvArray,texNodeName,0.10)
 
 else:
 	print 'no mesh is selected'
