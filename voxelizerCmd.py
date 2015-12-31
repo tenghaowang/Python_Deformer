@@ -418,10 +418,10 @@ if mSelectionlist.length() > 0:
 	voxelData = voxel()
 	meshContainer = OpenMaya.MObject()
 	#meshContainer = createMeshContainer()
-	voxelData = getVoxels (meshContainer,0.11, BBox, mFnMesh)
+	voxelData = getVoxels (meshContainer,0.12, BBox, mFnMesh)
 	voxelCenterPositions = voxelData.voxelCenterPositions
 	uvArray = voxelData.uvCoordArray
-	createVoxelMesh(meshContainer,voxelCenterPositions,uvArray,texNodeName,0.10)
+	createVoxelMesh(meshContainer,voxelCenterPositions,uvArray,texNodeName,0.1)
 
 else:
 	print 'no mesh is selected'
