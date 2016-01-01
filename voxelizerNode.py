@@ -1,3 +1,9 @@
+#Created By RyanWang
+#@Used for convert any geometry to voxel
+#support color mapping
+#still working on animation mapping
+#feel free to contact me @ tenghaow@andrew.cmu.edu
+
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
 import maya.cmds as cmds
