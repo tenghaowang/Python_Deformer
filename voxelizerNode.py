@@ -24,32 +24,13 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 	voxelWidth = OpenMaya.MObject()
 	voxelGap = OpenMaya.MObject()
 	voxelMessage = OpenMaya.MObject()
+	vertexColor = OpenMaya.MObject()
 	inputMesh = OpenMaya.MObject()
 	outputMesh = OpenMaya.MObject()
 
 	def __init__(self):
 		'''constructor(call the base class's constructor)'''
 		OpenMayaMPx.MPxNode.__init__(self)
-
-	def assignShader(self, plugName):
-		#--[retrive initialShadingGroup]--#
-		mSelectionList = OpenMaya.MSelectionList()
-		mSelectionList.add("initialShadingGroup")
-		mSelectionList.add(plugName)
-		
-		mObject_initShdGrp= OpenMaya.MObject()
-		mDagPath = OpenMaya.MDagPath()
-		mOutputMesh = OpenMaya.MObject()
-		mSelectionList.getDependNode(0,mObject_initShdGrp)
-		mSelectionList.getDependNode(1,mOutputMesh) 
-		mSelectionList.getDagPath(1,mDagPath)
-		print mDagPath.fullPathName()
-		mMeshShape = OpenMaya.MFnMesh(mDagPath)
-		mFnDependencyNode_initialShadingGroup = OpenMaya.MFnDependencyNode(mObject_initShdGrp)
-		#mFnDependencyNode_initialShadingGroup.setObject(mObject_initShdGrp) 
-		#name = mFnDependencyNode_initialShadingGroup.name() # Result: initialShadingGroup, so it ok so far
-		fnSet = OpenMaya.MFnSet(mObject_initShdGrp)
-		fnSet.addMember(mOutputMesh)
 
 	def compute (self, pPlug, pDataBlock):
 		if (pPlug == voxelizerNode.outputMesh):
@@ -66,9 +47,9 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 			mFnMesh = OpenMaya.MFnMesh(mDagPath)
 			'''
 			#use message node to pass the file name
-			messagePlug = OpenMaya.MPlug(self.thisMObject(), voxelizerNode.voxelMessage)
+			vertexColPlug = OpenMaya.MPlug(self.thisMObject(), voxelizerNode.vertexColor)
 			connections = OpenMaya.MPlugArray()
-			messagePlug.connectedTo(connections, True, False)
+			vertexColPlug.connectedTo(connections, True, False)
 			if connections.length() > 0:
 				mDependNode = OpenMaya.MFnDependencyNode (connections[0].node())
 				texNodeName = mDependNode.name()
@@ -515,13 +496,20 @@ def nodeInitializer():
 	numericAttrFn.setMin(0)
 	voxelizerNode.addAttribute(voxelizerNode.voxelGap)
 
-	#need an message attribute to declare relationship and get texture node name
+	#need an message attribute to declare relationship
 	voxelizerNode.voxelMessage = messageAttrFn.create('voxelMessage', 'vm')
 	messageAttrFn.setReadable(False)
 	messageAttrFn.setWritable(True)
 	messageAttrFn.setStorable(True)
 	messageAttrFn.setKeyable(False)
 	voxelizerNode.addAttribute(voxelizerNode.voxelMessage)
+
+	#try use color attributeto declare relationship and get texture node name
+	voxelizerNode.vertexColor = numericAttrFn.createColor('vertexColor', 'vc')
+	numericAttrFn.setReadable(False)
+	numericAttrFn.setWritable(True)
+	numericAttrFn.setStorable(True)
+	voxelizerNode.addAttribute(voxelizerNode.vertexColor)
 
 	#need an input mesh attribute
 	voxelizerNode.inputMesh = typedAttrFn.create('inputMesh', 'im', OpenMaya.MFnData.kMesh)
@@ -543,7 +531,7 @@ def nodeInitializer():
 	#set dirty
 	voxelizerNode.attributeAffects(voxelizerNode.voxelWidth, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.voxelGap, voxelizerNode.outputMesh)
-	voxelizerNode.attributeAffects(voxelizerNode.voxelMessage, voxelizerNode.outputMesh)
+	voxelizerNode.attributeAffects(voxelizerNode.vertexColor, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.inputMesh, voxelizerNode.outputMesh)
 	print 'setDirty'
 
