@@ -23,6 +23,7 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 	#define attribute handle
 	voxelWidth = OpenMaya.MObject()
 	voxelGap = OpenMaya.MObject()
+	voxelMessage = OpenMaya.MObject()
 	inputMesh = OpenMaya.MObject()
 	outputMesh = OpenMaya.MObject()
 
@@ -53,6 +54,7 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 	def compute (self, pPlug, pDataBlock):
 		if (pPlug == voxelizerNode.outputMesh):
 			#query the incoming mesh's shader for later color mapping
+			'''
 			inPlug = OpenMaya.MPlug(self.thisMObject(),voxelizerNode.inputMesh)
 			connections = OpenMaya.MPlugArray()
 			inPlug.connectedTo(connections, True, False)
@@ -62,9 +64,20 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 			mDagPath =OpenMaya.MDagPath()
 			mSelectionList.getDagPath(0,mDagPath)
 			mFnMesh = OpenMaya.MFnMesh(mDagPath)
-			#Initiate Kmesh Data
+			'''
+			#use message node to pass the file name
+			messagePlug = OpenMaya.MPlug(self.thisMObject(), voxelizerNode.voxelMessage)
+			connections = OpenMaya.MPlugArray()
+			messagePlug.connectedTo(connections, True, False)
+			if connections.length() > 0:
+				mDependNode = OpenMaya.MFnDependencyNode (connections[0].node())
+				texNodeName = mDependNode.name()
+				print 'vertex mapping'
+			else:
+				texNodeName = False
+				print 'no vertex color mapping '
 			#This method will only work with a MFnMesh function set which has been initialized with an MFn::kMesh.
-			texNodeName = self.meshTextureNode(mFnMesh) # 'file1' #
+			#texNodeName = self.meshTextureNode(mFnMesh) # 'file1' #
 			#get custom input node attributes and values
 			voxelWidthHandle = pDataBlock.inputValue(voxelizerNode.voxelWidth)
 			voxelWidthValue = voxelWidthHandle.asFloat()
@@ -75,7 +88,6 @@ class voxelizerNode (OpenMayaMPx.MPxNode):
 			inputMeshHandle = pDataBlock.inputValue(voxelizerNode.inputMesh)
 			inputMeshObj = inputMeshHandle.asMesh()
 			#inputMeshObj ---> kMeshData not KMesh
-			print inputMeshObj.apiTypeStr()
 			mFnMesh = OpenMaya.MFnMesh(inputMeshObj)
 			#compute the bounding box for the mesh's vertices
 			BBox = OpenMaya.MBoundingBox()
@@ -482,6 +494,7 @@ def nodeInitializer():
 	#creat functionsets
 	numericAttrFn = OpenMaya.MFnNumericAttribute()
 	typedAttrFn = OpenMaya.MFnTypedAttribute()
+	messageAttrFn = OpenMaya.MFnMessageAttribute()
 	#INPUT NODE ATTRIBUTES
 	#creates attributes
 	global defaultVoxelWidth
@@ -501,6 +514,14 @@ def nodeInitializer():
 	numericAttrFn.setKeyable(True)
 	numericAttrFn.setMin(0)
 	voxelizerNode.addAttribute(voxelizerNode.voxelGap)
+
+	#need an message attribute to declare relationship and get texture node name
+	voxelizerNode.voxelMessage = messageAttrFn.create('voxelMessage', 'vm')
+	messageAttrFn.setReadable(False)
+	messageAttrFn.setWritable(True)
+	messageAttrFn.setStorable(True)
+	messageAttrFn.setKeyable(False)
+	voxelizerNode.addAttribute(voxelizerNode.voxelMessage)
 
 	#need an input mesh attribute
 	voxelizerNode.inputMesh = typedAttrFn.create('inputMesh', 'im', OpenMaya.MFnData.kMesh)
@@ -522,6 +543,7 @@ def nodeInitializer():
 	#set dirty
 	voxelizerNode.attributeAffects(voxelizerNode.voxelWidth, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.voxelGap, voxelizerNode.outputMesh)
+	voxelizerNode.attributeAffects(voxelizerNode.voxelMessage, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.inputMesh, voxelizerNode.outputMesh)
 	print 'setDirty'
 
