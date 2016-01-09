@@ -1,6 +1,5 @@
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
-import maya.OpenMayaAnim as OpenMayaAnim
 import maya.cmds as cmds
 import math
 import sys
@@ -24,6 +23,14 @@ def createMeshContainer():
 	mDependNode = OpenMaya.MFnDependencyNode(mGroup)
 	#print mDependNode.name()
 	return mDependNode.name()
+
+#use maya API to generate the polycube primitives 
+def createPolyCube(meshContainer, cubeWidth, voxelCenterPosition):
+		mDagNode = OpenMaya.MFnDagNode()
+		myCube=cmds.polyCube(w=cubeWidth,h=cubeWidth,d=cubeWidth)
+		cmds.move(voxelCenterPosition.x, voxelCenterPosition.y, voxelCenterPosition.z, myCube)
+		cmds.parent(myCube[0], meshContainer)
+
 
 #The code below is to manully generate the polycube primitive
 def createVoxelMesh(meshContainer, voxelCenterPosition,uvArray,texNodeName,cubeWidth):
@@ -391,67 +398,18 @@ def meshTextureNode(mMeshObj):
 			return False
 
 
-def getShape(node):
-	#default consider only one shape node under transform node 
-	#do not consider intermediateObject
-	if cmds.nodeType(node) == 'transform':
-		#remove intermediateObject
-		shapes = cmds.listRelatives(node, c=True, s=True, ni=True, pa=True)
-		if not shapes:
-			shapes = []
-		if len(shapes) > 0:
-			return shapes[0]
-	elif cmds.nodeType(node) in ['mesh', 'nurbsCurve', 'nurbsSurface']:
-		return node
-	return None
 
 
-def getSkinCluster(shapeNode):
-	'''
-	If this flag is set, only nodes whose historicallyInteresting attribute value is not 
-	less than the value will be listed. The historicallyInteresting attribute is 0 on nodes 
-	which are not of interest to non-programmers. 1 for the TDs, 2 for the users.
-	'''
-	history = cmds.listHistory(shapeNode,pdo=True,il=2)
-	if not history:
-		return None
-	for x in history:
-		if cmds.nodeType(x) == 'skinCluster':
-			skins = x
-	if skins:
-		return skins
-	return None
-
-def getWeightList(SkinCluster):
-try:
-	shape = cmds.ls(sl=True)[0]
-	print shape
-except:
-	raise RuntimeError('No Shape is selected')
-
-shape = getShape(shape)
-if not shape:
-	raise RuntimeError('No shape node is connected to %s' %shape)
-skinCluster = getSkinCluster(shape)
-if not skinCluster:
-	raise RuntimeError('No skinCluster is connected to %s' %shape)
 
 mSelectionlist = OpenMaya.MSelectionList()
-#OpenMaya.MGlobal.getActiveSelectionList(mSelectionlist)
-mSelectionlist.add(shape)
-mSelectionlist.add(skinCluster)
-
+OpenMaya.MGlobal.getActiveSelectionList(mSelectionlist)
 mDagPath = OpenMaya.MDagPath()
 selectObj = OpenMaya.MObject()
-mObj_skincluster = OpenMaya.MObject()
+
 if mSelectionlist.length() > 0:
+	print 'select something'
 	mSelectionlist.getDependNode(0,selectObj)
 	mSelectionlist.getDagPath(0,mDagPath)
-	mSelectionlist.getDependNode(1,mObj_skincluster)
-	mfnSkinCluster = OpenMayaAnim.MFnSkinCluster(mObj_skincluster)
-	mPathArray = OpenMaya.MDagPathArray()
-	numInfluenceObjs = mfnSkinCluster.influenceObjects(mPathArray)
-	print numInfluenceObjs
 
 	mFnMesh = OpenMaya.MFnMesh(mDagPath)
 	BBox = OpenMaya.MBoundingBox()
@@ -464,12 +422,12 @@ if mSelectionlist.length() > 0:
 	voxelCenterPositions = voxelData.voxelCenterPositions
 	uvArray = voxelData.uvCoordArray
 	createVoxelMesh(meshContainer,voxelCenterPositions,uvArray,texNodeName,0.1)
-'''
+
 else:
 	print 'no mesh is selected'
 
 
 
-'''
+
 
 
