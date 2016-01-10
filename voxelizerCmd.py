@@ -14,9 +14,23 @@ class voxel(object):
         # instance variable unique to each instance
     	self.voxelCenterPositions=[]
     	self.uvCoordArray=[]
+    	self.weights = []
+    	self.blendWeights=[]
 
 class voxelization(object):
-
+	
+	@classmethod
+	def createVoxelGeom(cls, voxelWidth = 1, voxelGap =0):
+		voxelGeom = voxelization()
+		BBox = voxelGeom.getBoundingBox (voxelGeom.mFnMesh)
+		texNodeName = voxelGeom.meshTextureNode(voxelGeom.mFnMesh)
+		voxelDistance = voxelWidth + voxelGap
+		voxelData = voxelGeom.getVoxels (voxelDistance, BBox, voxelGeom.mFnMesh)		
+		voxelCenterPositions = voxelData.voxelCenterPositions
+		uvArray = voxelData.uvCoordArray
+		voxelWeights = voxelData.weights
+		voxelBlendWeights = voxelData.blendWeights
+		voxelGeom.createVoxelMesh(voxelCenterPositions,uvArray,texNodeName,voxelWidth,voxelWeights,voxelBlendWeights)
 
 	def getShape(self, node):
 		#default consider only one shape node under transform node 
@@ -40,8 +54,10 @@ class voxelization(object):
 		which are not of interest to non-programmers. 1 for the TDs, 2 for the users.
 		'''
 		history = cmds.listHistory(shapeNode,pdo=True,il=2)
+		print history
 		if not history:
 			return None
+		skins = None
 		for x in history:
 			if cmds.nodeType(x) == 'skinCluster':
 				skins = x
@@ -57,55 +73,38 @@ class voxelization(object):
 			print shape
 		except:
 			raise RuntimeError('No Shape is selected')
-
-		shape = self.getShape(shape)
+		mSelectionlist = OpenMaya.MSelectionList()	
+		shape = self.getShape(shape)	
+		mSelectionlist.add(shape)	
+		self.skinCluster = self.getSkinCluster(shape)
 		if not shape:
 			raise RuntimeError('No shape node is connected to %s' %shape)
-		skinCluster = self.getSkinCluster(shape)
-		if not skinCluster:
-			raise RuntimeError('No skinCluster is connected to %s' %shape)
+		if not self.skinCluster:
+			print 'there is no skinculster is connected %s' %shape
+			#raise RuntimeError('No skinCluster is connected to %s' %shape)
+		else:
+			mSelectionlist.add(self.skinCluster)
+			mObj_skincluster = OpenMaya.MObject()
+			mSelectionlist.getDependNode(1,mObj_skincluster)
+			self.mfnSkinCluster = OpenMayaAnim.MFnSkinCluster(mObj_skincluster)
+			self.weights = self.getSkinClusterWeight()
+			self.blendWeights = self.getSkinClusterBlendWeight()
 
-		mSelectionlist = OpenMaya.MSelectionList()
-		#OpenMaya.MGlobal.getActiveSelectionList(mSelectionlist)
-		mSelectionlist.add(shape)
-		mSelectionlist.add(skinCluster)
+			#print self.weights
 
 		mDagPath = OpenMaya.MDagPath()
 		selectObj = OpenMaya.MObject()
 		mObj_skincluster = OpenMaya.MObject()
-		if mSelectionlist.length() > 0:
-			mSelectionlist.getDependNode(0,selectObj)
-			mSelectionlist.getDagPath(0,mDagPath)
-			mSelectionlist.getDependNode(1,mObj_skincluster)
-			mfnSkinCluster = OpenMayaAnim.MFnSkinCluster(mObj_skincluster)
-			mPathArray = OpenMaya.MDagPathArray()
-			numInfluenceObjs = mfnSkinCluster.influenceObjects(mPathArray)
-			print numInfluenceObjs
 
-			mFnMesh = OpenMaya.MFnMesh(mDagPath)
-			BBox = OpenMaya.MBoundingBox()
-			BBox = self.getBoundingBox (mFnMesh)
-			texNodeName = self.meshTextureNode(mFnMesh)
-			voxelData = voxel()
-			meshContainer = OpenMaya.MObject()
-			#meshContainer = createMeshContainer()
-			voxelData = self.getVoxels (meshContainer,0.12, BBox, mFnMesh)
-			voxelCenterPositions = voxelData.voxelCenterPositions
-			uvArray = voxelData.uvCoordArray
-			self.createVoxelMesh(meshContainer,voxelCenterPositions,uvArray,texNodeName,0.1)
+		mSelectionlist.getDependNode(0,selectObj)
+		mSelectionlist.getDagPath(0,mDagPath)
+		self.mFnMesh = OpenMaya.MFnMesh(mDagPath)
+		self.vertexArray = OpenMaya.MPointArray()
+		self.mFnMesh.getPoints(self.vertexArray)
 
-
-
-	def createMeshContainer(self):
-		mDagNode = OpenMaya.MFnDagNode()
-		mTransform = OpenMaya.MObject()
-		mGroup = mDagNode.create('transform','voxelGeom')
-		mDependNode = OpenMaya.MFnDependencyNode(mGroup)
-		#print mDependNode.name()
-		return mDependNode.name()
 
 	#The code below is to manully generate the polycube primitive
-	def createVoxelMesh(self,meshContainer, voxelCenterPosition,uvArray,texNodeName,cubeWidth):
+	def createVoxelMesh(self,voxelCenterPosition,uvArray,texNodeName,cubeWidth,voxelWeights,voxelBlendWeights):
 		numVoxels = len(voxelCenterPosition)
 		numVertices = 8														#number of vertices
 		numPolygons = 6 													#number of polygons
@@ -132,6 +131,10 @@ class voxelization(object):
 		vertexIndexArray = OpenMaya.MIntArray()
 		#PolygonIDArray
 		faceList = OpenMaya.MIntArray()
+		#vertexWeightArray
+		vertexWeightArray = OpenMaya.MDoubleArray()
+		#vertexBlendWeightArray
+		vertexBlendWeightArray = OpenMaya.MDoubleArray()
 
 		for i in range (numVoxels):
 			pVoxelCenterPosition = voxelCenterPosition[i]
@@ -148,6 +151,12 @@ class voxelization(object):
 
 			for j in range (numVertices):
 				vertexArray.append(vertexList[j])
+				#here need to assign vertexWeight
+				if self.skinCluster:
+					for item in voxelWeights[i]:
+						vertexWeightArray.append(item)
+					vertexBlendWeightArray.append(voxelBlendWeights[i])
+					#print [item for sublist in voxelWeights[i] for item in sublist]
 				#here need to assign vertex color
 				if texNodeName:
 					vertexColor = cmds.colorAtPoint(texNodeName, o='RGB', u=uvArray[i][0], v=uvArray[i][1])
@@ -202,14 +211,14 @@ class voxelization(object):
 			for j in range (numNormalsPerVoxel):
 				vertexNormals.append(vertexNormalsList[j])
 				polygonConnects.append(polygonConnectsList[j] + i * numVertices)
-			#for j in range (numPolygonConnectsPerVoxel):
-
-
 
 		mFnMesh = OpenMaya.MFnMesh()
 		#shapeNode
 		mMeshShape = mFnMesh.create (totalVertices, totalPolygons, vertexArray, polygonCounts, polygonConnects)
 		mDagNode = OpenMaya.MFnDagNode(mMeshShape)
+		mDagNode.setName('voxelGeom')
+		#in case name existing:
+		name = mDagNode.name()
 		#print mDagNode.name()
 		mDagPath = OpenMaya.MDagPath()
 		mDagNode = OpenMaya.MFnDagNode(mDagNode.child(0))
@@ -236,6 +245,24 @@ class voxelization(object):
 			mCubeMesh.setIsColorClamped('vertexClorSet', True)
 			mCubeMesh.setVertexColors(vertexColorArray, vertexIndexArray, None, OpenMaya.MFnMesh.kRGB)
 		#'''
+		 		#if need to remap the animation
+		if self.skinCluster:
+			influenceObj = cmds.skinCluster(q=True,inf=True)
+			voxelSkinCluster = cmds.skinCluster(influenceObj, name, tsb=2, nw=2)
+			mSelectionlist = OpenMaya.MSelectionList()
+			mSelectionlist.add(voxelSkinCluster[0])
+			mObj_voxelSkinCluster = OpenMaya.MObject()
+			mSelectionlist.getDependNode(0,mObj_voxelSkinCluster)
+			mfnSkinCluster = OpenMayaAnim.MFnSkinCluster(mObj_voxelSkinCluster)
+			mDagPath,component = self.getSkinClusterData(mfnSkinCluster)
+			influenceIndices = OpenMaya.MIntArray()
+			for i in xrange(len(influenceObj)):
+				influenceIndices.append(i)
+			print voxelWeights
+			mfnSkinCluster.setWeights(mDagPath, component, influenceIndices,vertexWeightArray,False)
+			mfnSkinCluster.setBlendWeights(mDagPath,component,vertexBlendWeightArray)
+
+		#'''
 		#--[retrive initialShadingGroup]--#
 		mSelectionList = OpenMaya.MSelectionList()
 		mSelectionList.add("initialShadingGroup")
@@ -250,7 +277,7 @@ class voxelization(object):
 
 
 
-	def getVoxels (self,meshContainer, mVoxelDistance, mBBox, mMeshObj):
+	def getVoxels (self,mVoxelDistance, mBBox, mMeshObj):
 		'''
 		iterate all the points inside the bounding box and do the
 		intersection test with the mesh
@@ -260,6 +287,9 @@ class voxelization(object):
 		'''
 		voxelCenterPositions=[]
 		uvArray = []
+		voxelWeights= []
+		voxelBlendWeights = []
+
 		util = OpenMaya.MScriptUtil()
 
 		mHalfVoxelDistance = mVoxelDistance/2
@@ -324,10 +354,16 @@ class voxelization(object):
 							uvPoint = util.asFloat2Ptr()
 							mPoint = OpenMaya.MPoint(raySource)
 							mMeshObj.getUVAtPoint (mPoint, uvPoint)
+							if self.skinCluster:
+								pointWeight = self.getClosetPointWeight(mPoint)
+								pointBlendWeight = self.getClosetPointBlendWeight(mPoint)
+								voxelWeights.append(pointWeight)
+								voxelBlendWeights.append(pointBlendWeight)
 							u = util.getFloat2ArrayItem (uvPoint,0,0)
 							v = util.getFloat2ArrayItem (uvPoint,0,1)
 							uv = [u,v]
-							uvArray.append(uv)						
+							uvArray.append(uv)
+										
 
 		#populate raysource Positions
 		xmin = mBBox.min().x
@@ -429,6 +465,8 @@ class voxelization(object):
 		voxelData =voxel()
 		voxelData.voxelCenterPositions = voxelCenterPositions
 		voxelData.uvCoordArray = uvArray
+		voxelData.weights = voxelWeights
+		voxelData.blendWeights = voxelBlendWeights
 		return voxelData
 
 
@@ -472,7 +510,64 @@ class voxelization(object):
 				return False
 
 
-x=voxelization()
+	def getSkinClusterData(self, skinCluster):
+		mfnSet = OpenMaya.MFnSet(skinCluster.deformerSet())
+		mSelectionList = OpenMaya.MSelectionList()
+		mfnSet.getMembers(mSelectionList,False)
+		mDagPath = OpenMaya.MDagPath()
+		component = OpenMaya.MObject()
+		mSelectionList.getDagPath(0,mDagPath,component)
+		return mDagPath, component
+
+	def getSkinClusterWeight(self):
+		mDagPath, component = self.getSkinClusterData(self.mfnSkinCluster)
+		util = OpenMaya.MScriptUtil()
+		util.createFromInt(0)
+		pUInt = util.asUintPtr()
+		weights = OpenMaya.MDoubleArray()
+		self.mfnSkinCluster.getWeights(mDagPath,component,weights,pUInt)
+		return weights
+
+	def getSkinClusterBlendWeight(self):
+		mDagPath, component =self.getSkinClusterData(self.mfnSkinCluster)
+		blendWeights = OpenMaya.MDoubleArray()
+		self.mfnSkinCluster.getBlendWeights(mDagPath,component,blendWeights)
+		return blendWeights
+
+	def getClosetPolygonVertices(self,point):
+		util = OpenMaya.MScriptUtil()
+		util.createFromInt(0)
+		pUInt = util.asIntPtr()
+		meshPoint = OpenMaya.MPoint()
+		self.mFnMesh.getClosestPoint(point,meshPoint,OpenMaya.MSpace.kWorld,pUInt)
+		polygonID = OpenMaya.MScriptUtil(pUInt).asInt()
+		vertexList = OpenMaya.MIntArray()
+		self.mFnMesh.getPolygonVertices(polygonID,vertexList)
+		#componentWeight = OpenMaya.MDoubleArray()
+		return vertexList
+
+	def getClosetPointWeight(self, point):
+		mPathArray = OpenMaya.MDagPathArray()
+		numInfluenceObjs = self.mfnSkinCluster.influenceObjects(mPathArray)
+		pointWeight=OpenMaya.MDoubleArray(numInfluenceObjs,0.0)
+		vertexList = self.getClosetPolygonVertices(point)
+		for i in range(numInfluenceObjs):
+			for index in vertexList:
+				#print self.weights[i*index+i]
+				pointWeight[i] = pointWeight[i] + self.weights[numInfluenceObjs*index+i]
+			pointWeight[i] /= vertexList.length()
+		#print pointWeight
+		return pointWeight
+
+	def getClosetPointBlendWeight(self, point):
+		blendWeight = 0.0
+		vertexList = self.getClosetPolygonVertices(point)
+		for index in vertexList:
+			blendWeight = blendWeight + self.blendWeights[index]
+		blendWeight /= vertexList.length()
+		return blendWeight
+
+voxelization.createVoxelGeom()
 
 
 
