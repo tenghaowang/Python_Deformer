@@ -1,3 +1,18 @@
+'''
+voxeliaztion Command --- Version 1.0
+#used to convert any  polymesh object to voxel
+#if there is lambert texture attached to the object, vertex color will be generated
+#if there is skincluster attached to the object, skincluster for voxel will be generated 
+weight and blend weight will be automatically set based on the original data 
+
+---important notice---
+for now the tool does not support multi threading so it could be super slow when applied to 
+high complexity model with small voxelWidth and voxelGap
+----------------------  
+@Author: Ryan Wang
+@Email: tenghaow@andrew.cmu.edu
+
+'''
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
 import maya.OpenMayaAnim as OpenMayaAnim
@@ -20,7 +35,7 @@ class voxel(object):
 class voxelization(object):
 	
 	@classmethod
-	def createVoxelGeom(cls, voxelWidth = 1, voxelGap =0):
+	def createVoxelGeom(cls, voxelWidth = 0.2, voxelGap =0):
 		voxelGeom = voxelization()
 		BBox = voxelGeom.getBoundingBox (voxelGeom.mFnMesh)
 		texNodeName = voxelGeom.meshTextureNode(voxelGeom.mFnMesh)
@@ -245,7 +260,7 @@ class voxelization(object):
 			mCubeMesh.setIsColorClamped('vertexClorSet', True)
 			mCubeMesh.setVertexColors(vertexColorArray, vertexIndexArray, None, OpenMaya.MFnMesh.kRGB)
 		#'''
-		 		#if need to remap the animation
+		 #create skincluster and remap weightData and blendWeight Data
 		if self.skinCluster:
 			influenceObj = cmds.skinCluster(q=True,inf=True)
 			voxelSkinCluster = cmds.skinCluster(influenceObj, name, tsb=2, nw=2)
@@ -509,7 +524,7 @@ class voxelization(object):
 				print 'there is no texture(lambert) bind to the mesh'
 				return False
 
-
+	#query skinCluster, get component and mDagPath 
 	def getSkinClusterData(self, skinCluster):
 		mfnSet = OpenMaya.MFnSet(skinCluster.deformerSet())
 		mSelectionList = OpenMaya.MSelectionList()
@@ -519,6 +534,7 @@ class voxelization(object):
 		mSelectionList.getDagPath(0,mDagPath,component)
 		return mDagPath, component
 
+	#get source mesh skincluster weightData
 	def getSkinClusterWeight(self):
 		mDagPath, component = self.getSkinClusterData(self.mfnSkinCluster)
 		util = OpenMaya.MScriptUtil()
@@ -527,25 +543,30 @@ class voxelization(object):
 		weights = OpenMaya.MDoubleArray()
 		self.mfnSkinCluster.getWeights(mDagPath,component,weights,pUInt)
 		return weights
-
+	#get source mesh skincluster blendWeightData
 	def getSkinClusterBlendWeight(self):
 		mDagPath, component =self.getSkinClusterData(self.mfnSkinCluster)
 		blendWeights = OpenMaya.MDoubleArray()
 		self.mfnSkinCluster.getBlendWeights(mDagPath,component,blendWeights)
 		return blendWeights
 
+	#find the closet polygon based on current point and query vertexID on the polygon
+	#return closet vertexID index
 	def getClosetPolygonVertices(self,point):
 		util = OpenMaya.MScriptUtil()
 		util.createFromInt(0)
 		pUInt = util.asIntPtr()
 		meshPoint = OpenMaya.MPoint()
+		#this function could use
 		self.mFnMesh.getClosestPoint(point,meshPoint,OpenMaya.MSpace.kWorld,pUInt)
 		polygonID = OpenMaya.MScriptUtil(pUInt).asInt()
 		vertexList = OpenMaya.MIntArray()
 		self.mFnMesh.getPolygonVertices(polygonID,vertexList)
-		#componentWeight = OpenMaya.MDoubleArray()
 		return vertexList
 
+	#query vertexID on the polygon and read weightData
+	#average all the polygon-vertex weightData and store it as voxelWeightData
+	#if using barycentric coorinates sytem may have more precise result
 	def getClosetPointWeight(self, point):
 		mPathArray = OpenMaya.MDagPathArray()
 		numInfluenceObjs = self.mfnSkinCluster.influenceObjects(mPathArray)
@@ -553,12 +574,12 @@ class voxelization(object):
 		vertexList = self.getClosetPolygonVertices(point)
 		for i in range(numInfluenceObjs):
 			for index in vertexList:
-				#print self.weights[i*index+i]
 				pointWeight[i] = pointWeight[i] + self.weights[numInfluenceObjs*index+i]
 			pointWeight[i] /= vertexList.length()
 		#print pointWeight
 		return pointWeight
 
+	#based on closet vertexID, query each blendWeightData and average them, store is as voxelBlendWeightData 
 	def getClosetPointBlendWeight(self, point):
 		blendWeight = 0.0
 		vertexList = self.getClosetPolygonVertices(point)
@@ -567,7 +588,7 @@ class voxelization(object):
 		blendWeight /= vertexList.length()
 		return blendWeight
 
-voxelization.createVoxelGeom()
+#voxelization.createVoxelGeom()
 
 
 
