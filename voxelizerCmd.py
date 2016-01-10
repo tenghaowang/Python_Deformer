@@ -126,7 +126,7 @@ class voxelization(object):
 		numVerticesPerPolygon = 4     										#number of vertices per polygon
 		numNormalsPerVoxel = numVerticesPerPolygon * numPolygons 			#24 number of vertex normals
 		numPolygonConnectsPerVoxel = numPolygons * numVerticesPerPolygon 	#24 number of polygon connects
-		cubeHalfWidth = cubeWidth/2
+		cubeHalfWidth = cubeWidth/2.0
 		#initialize all the params in the MFnMesh.create()
 		#vertexArray: point array, This should include all the vertices in the mesh and no eatras
 		totalVertices = numVertices * numVoxels
