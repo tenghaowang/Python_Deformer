@@ -539,7 +539,7 @@ def nodeInitializer():
 	voxelizerNode.attributeAffects(voxelizerNode.voxelGap, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.vertexColor, voxelizerNode.outputMesh)
 	voxelizerNode.attributeAffects(voxelizerNode.inputMesh, voxelizerNode.outputMesh)
-	print 'setDirty'
+
 
 
 def initializePlugin(mObject):
