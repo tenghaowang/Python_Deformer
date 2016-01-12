@@ -69,7 +69,6 @@ class voxelization(object):
 		which are not of interest to non-programmers. 1 for the TDs, 2 for the users.
 		'''
 		history = cmds.listHistory(shapeNode,pdo=True,il=2)
-		print history
 		if not history:
 			return None
 		skins = None
@@ -85,7 +84,6 @@ class voxelization(object):
 	def __init__(self, shape=None):
 		try:
 			shape = cmds.ls(sl=True)[0]
-			print shape
 		except:
 			raise RuntimeError('No Shape is selected')
 		mSelectionlist = OpenMaya.MSelectionList()	
@@ -273,7 +271,7 @@ class voxelization(object):
 			influenceIndices = OpenMaya.MIntArray()
 			for i in xrange(len(influenceObj)):
 				influenceIndices.append(i)
-			print voxelWeights
+			#print voxelWeights
 			mfnSkinCluster.setWeights(mDagPath, component, influenceIndices,vertexWeightArray,False)
 			mfnSkinCluster.setBlendWeights(mDagPath,component,vertexBlendWeightArray)
 
