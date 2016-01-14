@@ -3,7 +3,7 @@ import maya.OpenMaya as OpenMaya
 import maya.OpenMayaRender as OpenMayaRender
 import maya.OpenMayaMPx as OpenMayaMPx
 
-nodeName = 'CVGKNode'
+nodeName = 'IkFkNode'
 nodeId = OpenMaya.MTypeId(0x1011fff)
 
 class CVGNode(OpenMayaMPx.MPxNode):
